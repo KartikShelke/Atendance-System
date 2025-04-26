@@ -1,9 +1,4 @@
-import os
-import subprocess
-import sys
 
-# Ensure face_recognition is installed
-subprocess.check_call([sys.executable, "-m", "pip", "install", "face_recognition"])
 
 # Then proceed with the imports
 import cv2
