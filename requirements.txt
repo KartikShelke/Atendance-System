@@ -1,6 +1,4 @@
-dlib
 face_recognition
 opencv-python
 pandas
 streamlit
-
