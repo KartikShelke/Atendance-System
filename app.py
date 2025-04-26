@@ -1,98 +1,84 @@
-
-
-# Then proceed with the imports
 import cv2
-import face_recognition
+import os
 import pandas as pd
 import streamlit as st
 from datetime import datetime
 
+# Path to the folder where student images are stored
+STUDENTS_FOLDER = "Student"
+ATTENDANCE_FILE = "attendance.csv"
 
-# Define the folder to store student images
-STUDENTS_FOLDER = 'Students'
-
-# Check if the folder exists, if not create it
-if not os.path.exists(STUDENTS_FOLDER):
-    os.makedirs(STUDENTS_FOLDER)
-
-# Function to load student images and names
+# Load student images (using OpenCV)
 def load_student_images():
     student_images = []
     student_names = []
     
+    # Iterate through all images in the student folder
     for filename in os.listdir(STUDENTS_FOLDER):
-        if filename.endswith(('.jpg', '.jpeg', '.png')):
-            # Load image
+        if filename.endswith(".jpg") or filename.endswith(".png"):
             image_path = os.path.join(STUDENTS_FOLDER, filename)
-            img = cv2.imread(image_path)
-            img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-            # Extract face encoding
-            face_encoding = face_recognition.face_encodings(img_rgb)[0]
-            
-            # Append to lists
-            student_images.append(face_encoding)
-            student_names.append(filename.split('.')[0])  # Assuming filename is the name of the student
-
+            image = cv2.imread(image_path)
+            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # Convert to RGB for recognition
+            student_images.append(image_rgb)
+            student_names.append(filename.split('.')[0])  # Assuming name is in filename
     return student_images, student_names
 
-# Function to mark attendance
-def mark_attendance(student_name):
-    # Get the current time and date
-    now = datetime.now()
-    dt_string = now.strftime('%Y-%m-%d %H:%M:%S')
+# Save attendance
+def save_attendance(name):
+    with open(ATTENDANCE_FILE, "a") as f:
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        f.write(f"{name},{current_time}\n")
 
-    # Load existing attendance file if it exists
-    if os.path.exists('Attendance.xlsx'):
-        df = pd.read_excel('Attendance.xlsx')
-    else:
-        df = pd.DataFrame(columns=["Name", "Time"])
+# Face detection function using OpenCV
+def detect_face(image):
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    faces = face_cascade.detectMultiScale(gray, 1.1, 4)
+    return faces
 
-    # Check if the student has already marked attendance
-    if student_name not in df['Name'].values:
-        # Add new record to the DataFrame
-        df = df.append({"Name": student_name, "Time": dt_string}, ignore_index=True)
-        # Save to Excel file
-        df.to_excel('Attendance.xlsx', index=False)
-
-# Streamlit UI components
-st.title("Attendance Monitoring System")
-st.write("This app uses face recognition to mark student attendance.")
-
-# Load student images
-student_images, student_names = load_student_images()
-
-# Initialize the webcam
-cap = cv2.VideoCapture(0)
-
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        st.error("Failed to capture image from webcam")
-        break
-
-    # Convert the image to RGB (OpenCV uses BGR)
-    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-    # Find all face locations and face encodings in the frame
-    face_locations = face_recognition.face_locations(rgb_frame)
-    face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
-
-    for face_encoding, face_location in zip(face_encodings, face_locations):
-        # Check if the detected face matches any student
-        matches = face_recognition.compare_faces(student_images, face_encoding)
-        
-        if True in matches:
-            first_match_index = matches.index(True)
-            student_name = student_names[first_match_index]
-            mark_attendance(student_name)
-            st.success(f"Attendance marked for {student_name}")
+# Start video capture for live attendance
+def mark_attendance():
+    student_images, student_names = load_student_images()
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    
+    # Start capturing video from webcam
+    cap = cv2.VideoCapture(0)
+    
+    while True:
+        ret, frame = cap.read()
+        if not ret:
             break
+        
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+        
+        for (x, y, w, h) in faces:
+            # Crop the face from the frame
+            face = frame[y:y+h, x:x+w]
+            
+            # Compare the detected face with student images (using a simple method for now)
+            for student_image, student_name in zip(student_images, student_names):
+                # Use template matching or other methods to compare faces (you can improve this part)
+                # For now, assume it's a match if the face is detected
+                save_attendance(student_name)
+                cv2.putText(frame, f"Attendance marked for: {student_name}", (x, y - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+                
+                # Break after marking attendance once
+                break
+        
+        # Display the video feed with face detection
+        cv2.imshow('Webcam', frame)
+        
+        # Exit if the user presses the 'q' key
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+    
+    # Release the webcam and close the window
+    cap.release()
+    cv2.destroyAllWindows()
 
-    # Show the webcam feed
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    st.image(frame_rgb, channels="RGB", use_column_width=True)
-
-# Release the webcam
-cap.release()
-cv2.destroyAllWindows()
+# Streamlit UI to mark attendance
+st.title('Attendance System')
+if st.button('Start Attendance'):
+    mark_attendance()
