@@ -1,9 +1,17 @@
 import os
+import subprocess
+import sys
+
+# Ensure face_recognition is installed
+subprocess.check_call([sys.executable, "-m", "pip", "install", "face_recognition"])
+
+# Then proceed with the imports
 import cv2
 import face_recognition
 import pandas as pd
 import streamlit as st
 from datetime import datetime
+
 
 # Define the folder to store student images
 STUDENTS_FOLDER = 'Students'
