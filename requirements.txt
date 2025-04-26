@@ -1,8 +1,5 @@
-streamlit
-opencv-python-headless
-mediapipe
-pandas
-numpy
-Pillow
-openpyxl
 face_recognition
+opencv-python
+pandas
+streamlit
+
