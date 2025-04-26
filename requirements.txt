@@ -4,3 +4,4 @@ mediapipe
 pandas
 numpy
 Pillow
+openpyxl
