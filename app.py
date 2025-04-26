@@ -1,92 +1,95 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import cv2
 import os
-import mediapipe as mp
+import cv2
+import face_recognition
+import pandas as pd
+import streamlit as st
 from datetime import datetime
-from PIL import Image
 
-# Load mediapipe face detection
-mp_face_detection = mp.solutions.face_detection
-mp_drawing = mp.solutions.drawing_utils
+# Define the folder to store student images
+STUDENTS_FOLDER = 'Students'
 
-# Directory containing student images
-STUDENTS_FOLDER = 'Student'
-ATTENDANCE_FILE = 'attendance.xlsx'
+# Check if the folder exists, if not create it
+if not os.path.exists(STUDENTS_FOLDER):
+    os.makedirs(STUDENTS_FOLDER)
 
-# Create Attendance File if not exist
-if not os.path.exists(ATTENDANCE_FILE):
-    df = pd.DataFrame(columns=['Name', 'Time'])
-    df.to_excel(ATTENDANCE_FILE, index=False)
+# Function to load student images and names
+def load_student_images():
+    student_images = []
+    student_names = []
+    
+    for filename in os.listdir(STUDENTS_FOLDER):
+        if filename.endswith(('.jpg', '.jpeg', '.png')):
+            # Load image
+            image_path = os.path.join(STUDENTS_FOLDER, filename)
+            img = cv2.imread(image_path)
+            img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+            # Extract face encoding
+            face_encoding = face_recognition.face_encodings(img_rgb)[0]
+            
+            # Append to lists
+            student_images.append(face_encoding)
+            student_names.append(filename.split('.')[0])  # Assuming filename is the name of the student
+
+    return student_images, student_names
+
+# Function to mark attendance
+def mark_attendance(student_name):
+    # Get the current time and date
+    now = datetime.now()
+    dt_string = now.strftime('%Y-%m-%d %H:%M:%S')
+
+    # Load existing attendance file if it exists
+    if os.path.exists('Attendance.xlsx'):
+        df = pd.read_excel('Attendance.xlsx')
+    else:
+        df = pd.DataFrame(columns=["Name", "Time"])
+
+    # Check if the student has already marked attendance
+    if student_name not in df['Name'].values:
+        # Add new record to the DataFrame
+        df = df.append({"Name": student_name, "Time": dt_string}, ignore_index=True)
+        # Save to Excel file
+        df.to_excel('Attendance.xlsx', index=False)
+
+# Streamlit UI components
+st.title("Attendance Monitoring System")
+st.write("This app uses face recognition to mark student attendance.")
 
 # Load student images
-def load_student_images():
-    images = []
-    names = []
-    for filename in os.listdir(STUDENTS_FOLDER):
-        if filename.endswith(('.png', '.jpg', '.jpeg')):
-            img_path = os.path.join(STUDENTS_FOLDER, filename)
-            img = cv2.imread(img_path)
-            img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            images.append(img_rgb)
-            names.append(os.path.splitext(filename)[0])
-    return images, names
+student_images, student_names = load_student_images()
 
-# Match face with saved images (simple pixel difference check)
-def match_face(face, student_images, student_names):
-    face_resized = cv2.resize(face, (150,150))
-    for idx, img in enumerate(student_images):
-        img_resized = cv2.resize(img, (150,150))
-        diff = np.mean(np.abs(face_resized - img_resized))
-        if diff < 50:  # Threshold can be adjusted
-            return student_names[idx]
-    return None
+# Initialize the webcam
+cap = cv2.VideoCapture(0)
 
-# Mark attendance
-def mark_attendance(name):
-    df = pd.read_excel(ATTENDANCE_FILE)
-    if name not in df['Name'].values:
-        now = datetime.now()
-        time_string = now.strftime('%H:%M:%S')
-        df = pd.concat([df, pd.DataFrame([[name, time_string]], columns=['Name', 'Time'])])
-        df.to_excel(ATTENDANCE_FILE, index=False)
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        st.error("Failed to capture image from webcam")
+        break
 
-# Streamlit App
-st.title("Attendance Monitoring System 📸")
+    # Convert the image to RGB (OpenCV uses BGR)
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-run = st.button('Start Camera')
+    # Find all face locations and face encodings in the frame
+    face_locations = face_recognition.face_locations(rgb_frame)
+    face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
 
-if run:
-    student_images, student_names = load_student_images()
-    cap = cv2.VideoCapture(0)
+    for face_encoding, face_location in zip(face_encodings, face_locations):
+        # Check if the detected face matches any student
+        matches = face_recognition.compare_faces(student_images, face_encoding)
+        
+        if True in matches:
+            first_match_index = matches.index(True)
+            student_name = student_names[first_match_index]
+            mark_attendance(student_name)
+            st.success(f"Attendance marked for {student_name}")
+            break
 
-    with mp_face_detection.FaceDetection(min_detection_confidence=0.7) as face_detection:
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
+    # Show the webcam feed
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    st.image(frame_rgb, channels="RGB", use_column_width=True)
 
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = face_detection.process(frame_rgb)
-
-            if results.detections:
-                for detection in results.detections:
-                    bboxC = detection.location_data.relative_bounding_box
-                    ih, iw, _ = frame.shape
-                    x, y, w, h = int(bboxC.xmin * iw), int(bboxC.ymin * ih), int(bboxC.width * iw), int(bboxC.height * ih)
-                    face_crop = frame_rgb[y:y+h, x:x+w]
-
-                    name = match_face(face_crop, student_images, student_names)
-
-                    if name:
-                        mark_attendance(name)
-                        cv2.putText(frame, f'{name}', (x,y-10), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
-                    else:
-                        cv2.putText(frame, 'Unknown', (x,y-10), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
-
-                    cv2.rectangle(frame, (x, y), (x + w, y + h), (255,0,0), 2)
-
-            st.image(frame, channels="BGR")
-
-    cap.release()
+# Release the webcam
+cap.release()
+cv2.destroyAllWindows()
