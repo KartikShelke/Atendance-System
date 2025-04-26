@@ -5,7 +5,7 @@ import streamlit as st
 from datetime import datetime
 
 # Path to the folder where student images are stored
-STUDENTS_FOLDER = "Student"
+STUDENTS_FOLDER = "Students"
 ATTENDANCE_FILE = "attendance.csv"
 
 # Load student images (using OpenCV)
