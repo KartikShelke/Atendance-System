@@ -12,7 +12,7 @@ mp_face_detection = mp.solutions.face_detection
 mp_drawing = mp.solutions.drawing_utils
 
 # Directory containing student images
-STUDENTS_FOLDER = 'student'
+STUDENTS_FOLDER = 'Student'
 ATTENDANCE_FILE = 'attendance.xlsx'
 
 # Create Attendance File if not exist
