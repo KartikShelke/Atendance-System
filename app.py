@@ -67,16 +67,16 @@ def mark_attendance():
                 # Break after marking attendance once
                 break
         
-        # Display the video feed with face detection
-        cv2.imshow('Webcam', frame)
+        # Display the video feed with face detection using Streamlit
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # Convert frame to RGB for Streamlit
+        st.image(frame_rgb, channels="RGB", use_column_width=True)
         
-        # Exit if the user presses the 'q' key
+        # Exit if the user presses the 'q' key (streamlit doesn't support key capture in the same way)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
     
-    # Release the webcam and close the window
+    # Release the webcam
     cap.release()
-    cv2.destroyAllWindows()
 
 # Streamlit UI to mark attendance
 st.title('Attendance System')
