@@ -41,8 +41,11 @@ def mark_attendance():
     student_images, student_names = load_student_images()
     face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
     
-    # Start capturing video from webcam
+    # Start capturing video from webcam (try different indices if 0 fails)
     cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        st.error("Camera not found or in use. Try restarting the app or check your device.")
+        return
     
     while True:
         ret, frame = cap.read()
